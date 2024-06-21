@@ -11,6 +11,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
+import java.time.Duration;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -20,16 +21,17 @@ public class App {
         return "Hello World!";
     }
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws InterruptedException {
 
         Config config = new Config();
         config.setCodec(new StringCodec());
         config.setNettyThreads(64);
-        config.useSingleServer().setAddress("redis://127.0.0.1:6379").setTimeout(5000).setConnectionMinimumIdleSize(1)
+        config.useSingleServer().setAddress("redis://127.0.0.1:6379").setTimeout(5000)
+                .setConnectionMinimumIdleSize(1)
                 .setConnectTimeout(500)
                 .setPingConnectionInterval(100)
                 .setKeepAlive(true)
-                .setRetryAttempts(3)
+                .setRetryAttempts(0)
                 .setIdleConnectionTimeout(100)
                 .setConnectionPoolSize(1);
         RedissonClient redissonClient = Redisson.create(config);
@@ -43,15 +45,20 @@ public class App {
                 System.out.println("ping success");
             }
         }, 0, 10, TimeUnit.SECONDS);
-        try {
-            Flux.range(1, 1000).parallel().runOn(Schedulers.boundedElastic())
-                    .flatMap(v -> {
-                        return Mono.fromCompletionStage(redissonClient.getBucket("test" + v).setAsync("test" + v)
-                                .thenCompose(x -> redissonClient.getBucket("test" + v).getAsync()));
-                    }).doOnNext(e -> System.out.println("success" + e))
-                    .doOnError(e -> e.printStackTrace()).then().block();
-        } catch (Exception e) {
-            e.printStackTrace();
+        for (int i = 0 ; i < 100; i++) {
+            try {
+                Flux.range(1, 1000).parallel().runOn(Schedulers.boundedElastic())
+                        .flatMap(v -> {
+                            return Mono.fromCompletionStage(redissonClient.getBucket("test" + v).setAsync("test" + v)
+                                    .thenCompose(x -> redissonClient.getBucket("test" + v).getAsync()));
+                        })
+                        //.doOnNext(e -> System.out.println("success" + e))
+                        .doOnError(e -> e.printStackTrace()).then().timeout(Duration.ofSeconds(10)).block();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            System.out.println(redissonClient.getBucket("test1").get());
+            Thread.sleep(1000);
         }
 
 

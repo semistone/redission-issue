@@ -25,8 +25,8 @@ public class App {
 
         Config config = new Config();
         config.setCodec(new StringCodec());
-        config.setNettyThreads(64);
-        config.useSingleServer().setAddress("redis://127.0.0.1:6379").setTimeout(5000)
+        config.setNettyThreads(8);
+        config.useSingleServer().setAddress("redis://127.0.0.1:6379").setTimeout(500)
                 .setConnectionMinimumIdleSize(1)
                 .setConnectTimeout(500)
                 .setPingConnectionInterval(100)
@@ -45,7 +45,7 @@ public class App {
                 System.out.println("ping success");
             }
         }, 0, 10, TimeUnit.SECONDS);
-        for (int i = 0 ; i < 100; i++) {
+        System.out.println(redissonClient.getBucket("test1").get());
             try {
                 Flux.range(1, 1000).parallel().runOn(Schedulers.boundedElastic())
                         .flatMap(v -> {
@@ -53,13 +53,10 @@ public class App {
                                     .thenCompose(x -> redissonClient.getBucket("test" + v).getAsync()));
                         })
                         //.doOnNext(e -> System.out.println("success" + e))
-                        .doOnError(e -> e.printStackTrace()).then().timeout(Duration.ofSeconds(10)).block();
+                        .doOnError(e -> e.printStackTrace()).then().timeout(Duration.ofSeconds(100)).block();
             } catch (Exception e) {
                 e.printStackTrace();
             }
-            System.out.println(redissonClient.getBucket("test1").get());
-            Thread.sleep(1000);
-        }
 
 
         System.out.println("==== connection never recover");
